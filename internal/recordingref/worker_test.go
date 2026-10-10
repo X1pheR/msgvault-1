@@ -42,13 +42,24 @@ func due(t *testing.T, f *storetest.Fixture) {
 
 func runDiscovery(t *testing.T, w *Worker, count int) {
 	t.Helper()
-	assert.Eventually(t, func() bool {
-		err := w.RunBatch(t.Context())
+	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
+	defer cancel()
+	tick := time.NewTicker(10 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		err := w.RunBatch(ctx)
 		require.NoError(t, err)
 		var got int
-		require.NoError(t, w.st.DB().QueryRow(`SELECT COUNT(*) FROM recording_references`).Scan(&got))
-		return got == count
-	}, 5*time.Second, 10*time.Millisecond)
+		require.NoError(t, w.st.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM recording_references`).Scan(&got))
+		if got == count {
+			return
+		}
+		select {
+		case <-tick.C:
+		case <-ctx.Done():
+			require.NoError(t, ctx.Err(), "discovered %d recording references, want %d", got, count)
+		}
+	}
 }
 
 func waitForRecordingChange(t *testing.T, w *Worker, id int64) {
