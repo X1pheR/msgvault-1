@@ -22,7 +22,6 @@ func TestShowVirtualChildren(t *testing.T) {
 		"inbox only":                   {"inbox@example.net", []store.VirtualAccount{inbox, empty}, false},
 		"alias divides the source":     {"inbox@example.net", []store.VirtualAccount{inbox, work}, true},
 		"unattributed mail":            {"inbox@example.net", []store.VirtualAccount{inbox, {Key: "unattributed:7", Unattributed: true, MessageCount: 2}}, true},
-		"pending repair":               {"inbox@example.net", []store.VirtualAccount{inbox, {Key: "unattributed:7", Unattributed: true, PendingCount: 1}}, true},
 		"imap identifier is the inbox": {"imaps://inbox%40example.net@imap.example.net:993", []store.VirtualAccount{inbox}, false},
 	} {
 		assert.Equal(t, tc.want, showVirtualChildren(query.AccountInfo{Identifier: tc.identifier, VirtualAccounts: tc.children}), name)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"testing/synctest"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/stretchr/testify/assert"
@@ -54,39 +55,49 @@ func newCatalogModel(t *testing.T, accounts []query.AccountInfo) (Model, *flakyC
 	return New(engine, Options{DataDir: t.TempDir(), Version: "test"}), engine
 }
 
-// loadAccountsOnce runs one account read through Update and returns the
-// model and its follow-up command, if any.
-func loadAccountsOnce(t *testing.T, model Model) (Model, tea.Cmd) {
+// loadAccountsOnce runs one account read through Update.
+func loadAccountsOnce(t *testing.T, model Model) Model {
 	t.Helper()
-	updated, cmd := model.Update(model.loadAccounts()())
-	return asModel(t, updated), cmd
+	updated, _ := model.Update(model.loadAccounts()())
+	return asModel(t, updated)
 }
 
 func TestAccountCatalogRecoversWithinSession(t *testing.T) {
-	require := require.New(t)
-	assert := assert.New(t)
-	model, engine := newCatalogModel(t, []query.AccountInfo{{ID: 7, Identifier: "inbox@example.net"}})
+	// The fake clock runs the backoff timers the model schedules, so each
+	// step executes the command Update actually returned.
+	synctest.Test(t, func(t *testing.T) {
+		require := require.New(t)
+		assert := assert.New(t)
+		model, engine := newCatalogModel(t, []query.AccountInfo{{ID: 7, Identifier: "inbox@example.net"}})
+		step := func(msg tea.Msg) tea.Cmd {
+			t.Helper()
+			updated, cmd := model.Update(msg)
+			model = asModel(t, updated)
+			return cmd
+		}
 
-	model, retry := loadAccountsOnce(t, model)
-	require.NotNil(retry, "an unavailable catalog schedules a reread")
-	assert.Empty(model.accounts[0].VirtualAccounts)
+		retry := step(model.loadAccounts()())
+		require.NotNil(retry, "an unavailable catalog schedules a reread")
+		assert.Empty(model.accounts[0].VirtualAccounts)
 
-	// A reread that fails outright keeps to the backoff instead of stopping.
-	engine.listErr = errors.New("daemon restarting")
-	updated, _ := model.Update(accountCatalogRetryMsg{})
-	model = asModel(t, updated)
-	model, retry = loadAccountsOnce(t, model)
-	require.NotNil(retry, "a failed reread during recovery schedules another")
+		// A reread that fails outright keeps to the backoff instead of stopping.
+		engine.listErr = errors.New("daemon restarting")
+		reload := step(retry())
+		require.NotNil(reload, "the backoff timer rereads the accounts")
+		retry = step(reload())
+		require.NotNil(retry, "a failed reread during recovery schedules another")
 
-	engine.listErr, engine.available = nil, true
-	model, retry = loadAccountsOnce(t, model)
-	assert.Nil(retry, "a readable catalog schedules nothing more")
-	assert.Equal(catalogChildren, model.accounts[0].VirtualAccounts)
+		engine.listErr, engine.available = nil, true
+		reload = step(retry())
+		require.NotNil(reload)
+		assert.Nil(step(reload()), "a readable catalog schedules nothing more")
+		assert.Equal(catalogChildren, model.accounts[0].VirtualAccounts)
 
-	// A later unavailable read keeps the receiving addresses already shown.
-	engine.available = false
-	model, _ = loadAccountsOnce(t, model)
-	assert.Equal(catalogChildren, model.accounts[0].VirtualAccounts)
+		// A later unavailable read keeps the receiving addresses already shown.
+		engine.available = false
+		step(model.loadAccounts()())
+		assert.Equal(catalogChildren, model.accounts[0].VirtualAccounts)
+	})
 }
 
 func TestAccountCatalogKeepsCachedChildrenAtStartup(t *testing.T) {
@@ -94,7 +105,7 @@ func TestAccountCatalogKeepsCachedChildrenAtStartup(t *testing.T) {
 	// unavailable; startup must show them rather than nothing.
 	cached := []store.VirtualAccount{catalogChildren[0]}
 	model, _ := newCatalogModel(t, []query.AccountInfo{{ID: 7, Identifier: "inbox@example.net", VirtualAccounts: cached}})
-	model, _ = loadAccountsOnce(t, model)
+	model = loadAccountsOnce(t, model)
 	assert.Equal(t, cached, model.accounts[0].VirtualAccounts)
 }
 
@@ -105,7 +116,7 @@ func TestAccountCatalogRefreshKeepsSelectorHighlight(t *testing.T) {
 		{ID: 7, Identifier: "inbox@example.net"},
 		{ID: 9, Identifier: "other@example.net"},
 	})
-	model, _ = loadAccountsOnce(t, model)
+	model = loadAccountsOnce(t, model)
 	model.openAccountSelector()
 	options := model.selectorOptions()
 	for i, option := range options {
@@ -117,7 +128,7 @@ func TestAccountCatalogRefreshKeepsSelectorHighlight(t *testing.T) {
 
 	// The recovered catalog inserts source 7's children above source 9.
 	engine.available = true
-	model, _ = loadAccountsOnce(t, model)
+	model = loadAccountsOnce(t, model)
 	highlighted := model.selectorOptions()[model.modalCursor]
 	require.Equal(scopeOptionAccount, highlighted.kind)
 	assert.Equal(int64(9), *highlighted.accountID, "the highlight stays on the same account")

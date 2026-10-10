@@ -1,6 +1,7 @@
 package search
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -8,17 +9,39 @@ import (
 )
 
 func TestValidateAccountScopes(t *testing.T) {
+	require := require.New(t)
 	zero := int64(0)
-	for name, scopes := range map[string][]AccountScope{
-		"empty":        {{}},
-		"display name": {{Addresses: []string{"Name <a@example.org>"}}},
-		"uppercase":    {{Addresses: []string{"A@example.org"}}},
-		"bad source":   {{SourceID: &zero, Unattributed: true}},
-		"too many":     make([]AccountScope, 17),
-	} {
-		require.Error(t, ValidateAccountScopes(scopes), name)
+	// Each rejected case is otherwise valid, so only its own rule can reject it.
+	valid := func(n int) []AccountScope {
+		scopes := make([]AccountScope, n)
+		for i := range scopes {
+			scopes[i] = AccountScope{Unattributed: true}
+		}
+		return scopes
 	}
-	require.NoError(t, ValidateAccountScopes([]AccountScope{{Unattributed: true}, {Addresses: []string{"a@example.org"}}}))
+	addresses := func(n int) []string {
+		out := make([]string, n)
+		for i := range out {
+			out[i] = fmt.Sprintf("a%d@example.org", i)
+		}
+		return out
+	}
+	for name, tc := range map[string]struct {
+		scopes []AccountScope
+		want   string
+	}{
+		"empty":              {[]AccountScope{{}}, "empty account scope"},
+		"display name":       {[]AccountScope{{Addresses: []string{"Name <a@example.org>"}}}, "invalid account address"},
+		"uppercase":          {[]AccountScope{{Addresses: []string{"A@example.org"}}}, "invalid account address"},
+		"bad source":         {[]AccountScope{{SourceID: &zero, Unattributed: true}}, "invalid account scope source ID"},
+		"too many":           {valid(17), "too many account scopes"},
+		"too many addresses": {[]AccountScope{{Addresses: addresses(65)}}, "too many account addresses"},
+	} {
+		require.ErrorContains(ValidateAccountScopes(tc.scopes), tc.want, name)
+	}
+	require.NoError(ValidateAccountScopes(valid(16)), "sixteen scopes are allowed")
+	require.NoError(ValidateAccountScopes([]AccountScope{{Addresses: addresses(64)}}), "64 addresses are allowed")
+	require.NoError(ValidateAccountScopes([]AccountScope{{Unattributed: true}, {Addresses: []string{"a@example.org"}}}))
 }
 
 func TestAccountScopesFromQuery(t *testing.T) {

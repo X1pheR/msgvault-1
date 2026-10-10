@@ -36,12 +36,15 @@ func TestParseAccountScopes(t *testing.T) {
 		{Addresses: []string{"work@example.org"}},
 	}, scopes)
 
-	for name, values := range map[string]url.Values{
-		"display name":   {"account_scopes": {`[{"addresses":["Name <a@example.org>"]}]`}},
-		"unknown member": {"account_scopes": {`[{"groups":["x"]}]`}},
+	for name, tc := range map[string]struct {
+		scopes, want string
+	}{
+		"display name": {`[{"addresses":["Name <a@example.org>"]}]`, "invalid account address"},
+		// Otherwise valid, so only strict decoding can reject it.
+		"unknown member": {`[{"unattributed":true,"groups":["x"]}]`, "invalid account scopes"},
 	} {
-		_, err := parseAccountScopes(request(values))
-		require.Error(t, err, name)
+		_, err := parseAccountScopes(request(url.Values{"account_scopes": {tc.scopes}}))
+		require.ErrorContains(t, err, tc.want, name)
 	}
 }
 
