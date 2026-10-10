@@ -60,8 +60,7 @@ func TestRecordingReferenceJob(t *testing.T) {
 			case <-r.Context().Done():
 				return
 			}
-			data, _ := json.Marshal(docbankmedia.Receipt{VaultUID: "vault", SourceID: "source", OperationID: req.OperationID, OccurrenceID: "occurrence", OperationState: "succeeded", CoverageState: "unprocessed", Outcome: "access_required"})
-			_, _ = w.Write(data)
+			assert.NoError(json.MarshalWrite(w, docbankmedia.Receipt{VaultUID: "vault", SourceID: "source", OperationID: req.OperationID, OccurrenceID: "occurrence", OperationState: "succeeded", CoverageState: "unprocessed", Outcome: "access_required"}))
 		}))
 		defer server.Close()
 		t.Setenv("MSGVAULT_TEST_REFERENCE_KEY", "synthetic-key")

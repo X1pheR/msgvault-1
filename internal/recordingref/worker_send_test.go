@@ -37,7 +37,7 @@ func TestRecordingReferenceRemovalBeforeSend(t *testing.T) {
 						return
 					}
 					requests <- req.ReferenceURL
-					writeReceipt(w, req.OperationID)
+					writeReceipt(t, w, req.OperationID)
 				})
 				worker := NewWorker(f.Store, client, "destination", nil, nil)
 				message, found, err := f.Store.ReadRecordingMessage(t.Context(), id)

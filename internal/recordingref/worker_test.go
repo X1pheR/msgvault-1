@@ -80,9 +80,9 @@ func recordingClient(t *testing.T, handler http.HandlerFunc) *docbankmedia.Clien
 	return c
 }
 
-func writeReceipt(w http.ResponseWriter, op string) {
-	data, _ := json.Marshal(docbankmedia.Receipt{VaultUID: "vault", SourceID: "source", OperationID: op, OccurrenceID: "occurrence", OperationState: "succeeded", CoverageState: "unprocessed", Outcome: "access_required"})
-	_, _ = w.Write(data)
+func writeReceipt(t *testing.T, w http.ResponseWriter, op string) {
+	t.Helper()
+	assert.NoError(t, json.MarshalWrite(w, docbankmedia.Receipt{VaultUID: "vault", SourceID: "source", OperationID: op, OccurrenceID: "occurrence", OperationState: "succeeded", CoverageState: "unprocessed", Outcome: "access_required"}))
 }
 
 func TestRecordingReferenceFeed(t *testing.T) {
@@ -93,7 +93,7 @@ func TestRecordingReferenceFeed(t *testing.T) {
 		if !assert.NoError(json.UnmarshalRead(r.Body, &req)) {
 			return
 		}
-		writeReceipt(w, req.OperationID)
+		writeReceipt(t, w, req.OperationID)
 	})
 	one := f.CreateMessage("one")
 	recordingBody(t, f, one, "https://loom.com/share/one")
@@ -133,7 +133,7 @@ func TestRecordingReferenceFeedHTML(t *testing.T) {
 			return
 		}
 		requests <- req
-		writeReceipt(w, req.OperationID)
+		writeReceipt(t, w, req.OperationID)
 	})
 	w := NewWorker(f.Store, client, "destination", nil, nil)
 	runDiscovery(t, w, 1)
@@ -198,7 +198,7 @@ func TestRecordingReferenceFeedHTMLVisibleURL(t *testing.T) {
 						return
 					}
 					requests <- req.ReferenceURL
-					writeReceipt(w, req.OperationID)
+					writeReceipt(t, w, req.OperationID)
 				})
 				w := NewWorker(f.Store, client, "destination", nil, nil)
 				runDiscovery(t, w, len(want))
@@ -268,7 +268,7 @@ func TestRecordingReferenceDelivery(t *testing.T) {
 				return
 			}
 			requests++
-			writeReceipt(w, req.OperationID)
+			writeReceipt(t, w, req.OperationID)
 		})
 		m, exists, err := f.Store.ReadRecordingMessage(t.Context(), id)
 		require.NoError(err)
@@ -316,7 +316,7 @@ func TestRecordingReferenceDelivery(t *testing.T) {
 					_, _ = w.Write([]byte(`{"code":"` + tc.code + `"}`))
 					return
 				}
-				writeReceipt(w, req.OperationID)
+				writeReceipt(t, w, req.OperationID)
 			})
 			if tc.name == "credential" {
 				client, err := docbankmedia.NewClient("http://127.0.0.1:1", func() (string, error) { return "", docbankmedia.ErrCredentialUnavailable })
@@ -392,7 +392,7 @@ func TestRecordingReferenceUncertain(t *testing.T) {
 			client := recordingClient(t, func(w http.ResponseWriter, r *http.Request) {
 				if r.Method == http.MethodGet {
 					gets <- r.URL.Path
-					writeReceipt(w, oldOperation)
+					writeReceipt(t, w, oldOperation)
 					return
 				}
 				var req docbankmedia.ReferenceRequest
@@ -411,7 +411,7 @@ func TestRecordingReferenceUncertain(t *testing.T) {
 				}
 				assert.True(sent.Valid)
 				cancel()
-				writeReceipt(w, req.OperationID)
+				writeReceipt(t, w, req.OperationID)
 			})
 			var logs bytes.Buffer
 			worker := NewWorker(f.Store, client, "destination", nil, slog.New(slog.NewTextHandler(&logs, nil)))
@@ -469,7 +469,7 @@ func TestRecordingReferenceUncertain(t *testing.T) {
 					w.WriteHeader(http.StatusServiceUnavailable)
 					return
 				}
-				writeReceipt(w, strings.TrimPrefix(r.URL.Path, "/api/v1/media/operations/"))
+				writeReceipt(t, w, strings.TrimPrefix(r.URL.Path, "/api/v1/media/operations/"))
 				return
 			}
 			var req docbankmedia.ReferenceRequest
@@ -489,7 +489,7 @@ func TestRecordingReferenceUncertain(t *testing.T) {
 				_ = conn.Close()
 				return
 			}
-			writeReceipt(w, req.OperationID)
+			writeReceipt(t, w, req.OperationID)
 		}))
 		defer server.Close()
 		client, err := docbankmedia.NewClient(server.URL, func() (string, error) { return os.Getenv("MSGVAULT_REFERENCE_TEST_KEY"), nil })
@@ -597,7 +597,7 @@ func TestRecordingReferenceUncertain(t *testing.T) {
 		due(t, f)
 		w.client = recordingClient(t, func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(http.MethodGet, r.Method)
-			writeReceipt(w, op)
+			writeReceipt(t, w, op)
 		})
 		err = w.RunBatch(t.Context())
 		require.NoError(err)
@@ -639,7 +639,7 @@ func TestRecordingReferenceUncertain(t *testing.T) {
 					}
 					w.WriteHeader(status)
 					if tc.status == 200 {
-						writeReceipt(w, strings.TrimPrefix(get, "/api/v1/media/operations/"))
+						writeReceipt(t, w, strings.TrimPrefix(get, "/api/v1/media/operations/"))
 					}
 					return
 				}
@@ -664,7 +664,7 @@ func TestRecordingReferenceUncertain(t *testing.T) {
 					w.WriteHeader(tc.status)
 					return
 				}
-				writeReceipt(w, req.OperationID)
+				writeReceipt(t, w, req.OperationID)
 			})
 			w := NewWorker(f.Store, client, "destination", nil, nil)
 			runDiscovery(t, w, 1)
@@ -769,7 +769,7 @@ func TestRecordingReferenceOccurrenceCorrection(t *testing.T) {
 				client := recordingClient(t, func(w http.ResponseWriter, r *http.Request) {
 					if r.Method == http.MethodGet {
 						gets <- r.URL.Path
-						writeReceipt(w, strings.TrimPrefix(r.URL.Path, "/api/v1/media/operations/"))
+						writeReceipt(t, w, strings.TrimPrefix(r.URL.Path, "/api/v1/media/operations/"))
 						ready.Store(true)
 						return
 					}
@@ -787,7 +787,7 @@ func TestRecordingReferenceOccurrenceCorrection(t *testing.T) {
 						}
 						return
 					}
-					writeReceipt(w, req.OperationID)
+					writeReceipt(t, w, req.OperationID)
 				})
 				worker := NewWorker(f.Store, client, "destination", nil, nil)
 				runDiscovery(t, worker, 1)
@@ -886,7 +886,7 @@ func TestRecordingReferenceSettlementRollback(t *testing.T) {
 					w.WriteHeader(http.StatusServiceUnavailable)
 					return
 				}
-				writeReceipt(w, req.OperationID)
+				writeReceipt(t, w, req.OperationID)
 			})
 			worker := NewWorker(f.Store, client, "destination", nil, nil)
 			runDiscovery(t, worker, 1)
@@ -986,7 +986,7 @@ func TestRecordingReferenceCorrectionDuringHTTP(t *testing.T) {
 						return
 					}
 				}
-				writeReceipt(w, req.OperationID)
+				writeReceipt(t, w, req.OperationID)
 			})
 			var mu sync.Mutex
 			gate := func(context.Context) (func(), bool) { mu.Lock(); return mu.Unlock, true }

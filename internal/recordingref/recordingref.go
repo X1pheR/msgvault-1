@@ -140,10 +140,6 @@ func admit(raw string, allowed map[string]bool) (Ref, bool) {
 	return Ref{Kind: kind, Origin: origin, RouteKey: digest(string(kind) + "\x00" + identity), Reference: raw, Canonical: canonical}, true
 }
 
-func Scan(text string, origins []string) []Ref {
-	return scanProse(text, origins, nil)
-}
-
 func scanProse(text string, origins []string, exact map[string]bool) []Ref {
 	allowed := originSet(origins)
 	seen := make(map[string]bool)
@@ -183,7 +179,7 @@ func ScanHTML(body string, origins []string) []Ref {
 				key, value, next := z.TagAttr()
 				more = next
 				if bytes.EqualFold(key, []byte("href")) {
-					if r, ok := admit(string(value), allowed); ok {
+					if r, ok := admit(strings.Trim(string(value), " \t\r\n\f"), allowed); ok {
 						refs = append(refs, r)
 					}
 					break

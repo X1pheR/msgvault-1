@@ -136,9 +136,9 @@ type DocbankIntegrationConfig struct {
 }
 
 func (d DocbankIntegrationConfig) validate() error {
-	for _, origin := range d.ReferenceOrigins {
+	for i, origin := range d.ReferenceOrigins {
 		if _, err := recordingref.CanonicalOrigin(origin); err != nil {
-			return errors.New("integrations.docbank.reference_origins: invalid origin")
+			return fmt.Errorf("integrations.docbank.reference_origins[%d]: invalid origin", i+1)
 		}
 	}
 	if strings.TrimSpace(d.ASRProfile) == "supplied-transcript" {

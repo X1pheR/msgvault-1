@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json/v2"
 	"errors"
+	"fmt"
 	"log/slog"
 	"slices"
 	"strings"
@@ -172,16 +173,17 @@ func (w *Worker) RunBatch(ctx context.Context) error {
 	}); err != nil {
 		return err
 	}
+	var deliveryErr error
 	for _, claim := range claims {
 		if err := w.deliver(ctx, claim); err != nil {
-			return err
+			deliveryErr = errors.Join(deliveryErr, fmt.Errorf("recording reference message %d route %s: %w", claim.MessageID, claim.RouteKey, err))
 		}
 		attempted++
 	}
 	if w.logger != nil {
 		w.logger.Debug("Recording reference pass", "examined", examined, "pages", pages, "attempted", attempted)
 	}
-	return nil
+	return deliveryErr
 }
 
 func (w *Worker) deliver(ctx context.Context, claim store.RecordingReferenceClaim) error {

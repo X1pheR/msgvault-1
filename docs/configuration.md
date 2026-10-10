@@ -1177,6 +1177,11 @@ It submits references with acquisition disabled. Docbank records outcome
 Delivery log events include Docbank's
 `source_id` and `occurrence_id` for `docbank media import-artifact`.
 
+Removing a recording link or deleting its message stops future submissions once
+the worker sees the change. A request already prepared for sending can still
+finish. The local `withdrawn` state does not retract an occurrence or delete media
+already retained by Docbank; manage those records in Docbank separately.
+
 A definite submission rejection leaves the reference blocked until the daemon restarts
 and sets up the enabled, consented route. Fix the rejection, then restart the
 daemon to reconsider it. Waiting for the next scheduled minute leaves it blocked.

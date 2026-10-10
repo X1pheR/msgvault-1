@@ -34,7 +34,7 @@ func TestRecordingReferenceFeedHTMLProse(t *testing.T) {
 					return
 				}
 				requests <- req.ReferenceURL
-				writeReceipt(w, req.OperationID)
+				writeReceipt(t, w, req.OperationID)
 			})
 			w := NewWorker(f.Store, client, "destination", nil, nil)
 			waitForRecordingChange(t, w, id)

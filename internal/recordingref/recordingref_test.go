@@ -38,7 +38,7 @@ func TestScan(t *testing.T) {
 		{"route identity", "https://loom.com/share/abc https://www.loom.com/embed/abc", nil, Loom, 2},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			refs := Scan(tc.text, tc.origins)
+			refs := scanProse(tc.text, tc.origins, nil)
 			require.Len(t, refs, tc.count)
 			if tc.count == 1 {
 				assert.Equal(t, tc.kind, refs[0].Kind)
@@ -46,7 +46,7 @@ func TestScan(t *testing.T) {
 			}
 		})
 	}
-	r := Scan("https://cap.example.test/s/abc?token=secret", []string{"https://cap.example.test"})
+	r := scanProse("https://cap.example.test/s/abc?token=secret", []string{"https://cap.example.test"}, nil)
 	require.Len(t, r, 1)
 	assert.Empty(t, r[0].Canonical)
 	assert.NotContains(t, r[0].Origin, "secret")
@@ -107,7 +107,7 @@ func TestScanHTML(t *testing.T) {
 			require.Len(refs, 1)
 			assert.Equal(raw, refs[0].Reference)
 			if raw == "https://cap.so/s/abc!" {
-				plain := Scan("https://cap.so/s/abc", nil)
+				plain := scanProse("https://cap.so/s/abc", nil, nil)
 				require.Len(plain, 1)
 				assert.NotEqual(plain[0].RouteKey, refs[0].RouteKey)
 				assert.Equal(raw, refs[0].Canonical)
@@ -115,4 +115,15 @@ func TestScanHTML(t *testing.T) {
 		})
 	}
 	assert.Empty(t, ScanHTML(`<a href="prefix https://cap.so/s/abc">Watch</a>`, nil))
+}
+
+func TestScanHTMLPaddedTarget(t *testing.T) {
+	for _, padding := range []string{" ", "\t\r\n\f"} {
+		t.Run(padding, func(t *testing.T) {
+			const target = "https://www.loom.com/share/abc?token=example!)"
+			refs := ScanHTML(`<a href="`+padding+target+padding+`">Watch</a>`, nil)
+			require.Len(t, refs, 1)
+			assert.Equal(t, target, refs[0].Reference)
+		})
+	}
 }

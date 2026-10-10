@@ -21,7 +21,9 @@ func TestDocbankReferenceConfig(t *testing.T) {
 	reloaded, err := Load(path, "")
 	require.NoError(err)
 	assert.Equal(cfg.Integrations.Docbank, reloaded.Integrations.Docbank)
-	require.NoError(os.WriteFile(path, []byte("[integrations.docbank]\nreference_origins = [\"https://example.test/s/token\"]\n"), 0600))
+	require.NoError(os.WriteFile(path, []byte("[integrations.docbank]\nreference_origins = [\"https://cap.example.test\", \"https://example.test/s/private-token\"]\n"), 0600))
 	_, err = Load(path, "")
-	assert.Error(err)
+	require.Error(err)
+	assert.Contains(err.Error(), "reference_origins[2]: invalid origin")
+	assert.NotContains(err.Error(), "private-token")
 }
