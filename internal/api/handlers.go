@@ -329,6 +329,9 @@ type MessageSummary struct {
 type MessageDetail struct {
 	MessageSummary
 
+	SourceConversationID string                    `json:"source_conversation_id,omitempty"`
+	SourceProvenance     *SourceProvenanceResponse `json:"source_provenance,omitempty"`
+
 	ConversationTitle string `json:"conversation_title,omitempty" doc:"Conversation title, when available."`
 
 	Body     string `json:"body"`
@@ -556,7 +559,9 @@ func messageDetailFromQuery(qMsg *query.MessageDetail) MessageDetail {
 	}
 
 	return MessageDetail{
-		ConversationTitle: qMsg.ConversationTitle,
+		ConversationTitle:    qMsg.ConversationTitle,
+		SourceConversationID: qMsg.SourceConversationID,
+		SourceProvenance:     sourceProvenanceResponse(qMsg.SourceProvenance),
 
 		ID:              qMsg.ID,
 		SourceID:        qMsg.SourceID,
@@ -794,11 +799,13 @@ func (s *Server) handleGetMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	detail := MessageDetail{
-		MessageSummary:    toMessageSummary(*msg),
-		ConversationTitle: msg.ConversationTitle,
-		Body:              msg.Body,
-		BodyHTML:          msg.BodyHTML,
-		IsFromMe:          msg.IsFromMe,
+		MessageSummary:       toMessageSummary(*msg),
+		ConversationTitle:    msg.ConversationTitle,
+		SourceConversationID: msg.SourceConversationID,
+		SourceProvenance:     sourceProvenanceResponse(msg.SourceProvenance),
+		Body:                 msg.Body,
+		BodyHTML:             msg.BodyHTML,
+		IsFromMe:             msg.IsFromMe,
 	}
 
 	attachments := make([]AttachmentInfo, 0, len(msg.Attachments))

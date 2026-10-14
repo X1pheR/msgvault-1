@@ -4,6 +4,7 @@ import (
 	"encoding/json/jsontext"
 	"fmt"
 	"net/http"
+	"reflect"
 	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -361,7 +362,8 @@ import (
 // 3.14.0 adds resumable paused source syncs to operation history.
 // 3.14.0 adds filename: filters, optional include_snippet/match_snippet context,
 // attachment names/counts, and hybrid_available on CLI search responses.
-const APISchemaVersion = "3.14.0"
+// 3.15.0 adds optional explicit mirror provenance to read-only message details.
+const APISchemaVersion = "3.15.0"
 
 // OpenAPIDocument builds the API schema from the same Huma route registration
 // used by the daemon. It binds no socket and needs no database.
@@ -417,6 +419,7 @@ func baseOpenAPIDocument(includeHidden bool) *huma.OpenAPI {
 	apiV1 := s.setupAPIV1Group(api)
 	s.registerHumaRoutes(api, apiV1)
 	doc := api.OpenAPI()
+	hardenMessageDetailSchemas(doc)
 	hardenSettingsSchemas(doc)
 	hardenSavedViewSchemas(doc)
 	hardenExploreSchemas(doc)
@@ -1481,4 +1484,22 @@ func nullableSchemaProperty(schema *huma.Schema, propertyName string) {
 	property.Extensions["x-oapi-codegen-extra-tags"] = map[string]any{
 		"validate": "omitempty",
 	}
+}
+
+func hardenMessageDetailSchemas(doc *huma.OpenAPI) {
+	if doc == nil || doc.Components == nil || doc.Components.Schemas == nil {
+		return
+	}
+	reg := doc.Components.Schemas
+	detail := reg.Map()["MessageDetail"]
+	if detail == nil {
+		return
+	}
+	if detail.Properties == nil {
+		detail.Properties = map[string]*huma.Schema{}
+	}
+	detail.Properties["source_conversation_id"] = &huma.Schema{Type: huma.TypeString}
+	detail.Properties["source_provenance"] = reg.Schema(
+		reflect.TypeFor[SourceProvenanceResponse](), true, "",
+	)
 }

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"go.kenn.io/msgvault/internal/sourceprovenance"
 	"go.kenn.io/msgvault/internal/store"
 	apiclient "go.kenn.io/msgvault/pkg/client"
 	"go.kenn.io/msgvault/pkg/client/generated"
@@ -146,7 +147,8 @@ func generatedDetailToAPIMessage(m *generated.MessageDetail) *store.APIMessage {
 		}
 	}
 	msg := &store.APIMessage{
-		ConversationTitle: stringValue(m.ConversationTitle),
+		ConversationTitle:    stringValue(m.ConversationTitle),
+		SourceConversationID: stringValue(m.SourceConversationID),
 
 		ID:              m.ID,
 		SourceID:        int64Value(m.SourceID),
@@ -169,6 +171,17 @@ func generatedDetailToAPIMessage(m *generated.MessageDetail) *store.APIMessage {
 		SizeEstimate:    m.SizeBytes,
 		Body:            m.Body,
 		Attachments:     apiAttachmentsFromGenerated(m.Attachments),
+	}
+	if m.SourceProvenance != nil {
+		msg.SourceProvenance = &sourceprovenance.Source{
+			Kind:               stringValue(m.SourceProvenance.Kind),
+			Repository:         stringValue(m.SourceProvenance.Repository),
+			RepositoryURL:      stringValue(m.SourceProvenance.RepositoryURL),
+			Commit:             stringValue(m.SourceProvenance.Commit),
+			ArchivePaths:       append([]string(nil), m.SourceProvenance.ArchivePaths...),
+			AuthorIdentity:     stringValue(m.SourceProvenance.AuthorIdentity),
+			LifecycleAuthority: stringValue(m.SourceProvenance.LifecycleAuthority),
+		}
 	}
 	return msg
 }

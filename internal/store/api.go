@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"go.kenn.io/msgvault/internal/search"
+	"go.kenn.io/msgvault/internal/sourceprovenance"
 	"go.kenn.io/msgvault/internal/sqliteutil"
 )
 
@@ -75,6 +76,7 @@ type APIMessage struct {
 	BodyOmitted          bool
 	IsFromMe             bool
 	Headers              map[string]string
+	SourceProvenance     *sourceprovenance.Source
 	Attachments          []APIAttachment
 }
 
@@ -228,7 +230,8 @@ func (s *Store) GetMessageContext(ctx context.Context, id int64) (*APIMessage, e
 			m.has_attachments,
 			m.size_estimate,
 			m.is_from_me,
-			m.deleted_from_source_at
+			m.deleted_from_source_at,
+			COALESCE(m.metadata, '{}')
 		FROM messages m
 		LEFT JOIN message_recipients mr ON mr.id = (
 			SELECT mr2.id FROM message_recipients mr2
@@ -246,6 +249,7 @@ func (s *Store) GetMessageContext(ctx context.Context, id int64) (*APIMessage, e
 	// TIMESTAMP column but routing it through the same scanner
 	// keeps the API consistent and tolerant of either driver.
 	var sentAt, deletedAt nullableTimestamp
+	var sourceMetadata string
 	var isFromMe sql.NullBool
 	err := s.db.QueryRowContext(ctx, query, id).Scan(
 		&m.ID,
@@ -266,6 +270,7 @@ func (s *Store) GetMessageContext(ctx context.Context, id int64) (*APIMessage, e
 		&m.SizeEstimate,
 		&isFromMe,
 		&deletedAt,
+		&sourceMetadata,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, fmt.Errorf("message %d: %w", id, ErrMessageNotFound)
@@ -281,6 +286,8 @@ func (s *Store) GetMessageContext(ctx context.Context, id int64) (*APIMessage, e
 		t := deletedAt.Time
 		m.DeletedAt = &t
 	}
+
+	m.SourceProvenance = sourceprovenance.FromMessageMetadata([]byte(sourceMetadata))
 
 	// Get recipients (single message, per-row is fine)
 	m.To, err = s.getRecipients(ctx, m.ID, "to")

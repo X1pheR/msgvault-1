@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"go.kenn.io/msgvault/internal/search"
+	"go.kenn.io/msgvault/internal/sourceprovenance"
 	"go.kenn.io/msgvault/internal/store"
 )
 
@@ -98,8 +99,9 @@ type MessageDetail struct {
 	BodyHTML string `json:"body_html"`
 
 	// Metadata
-	Labels      []string         `json:"labels"`
-	Attachments []AttachmentInfo `json:"attachments"`
+	SourceProvenance *sourceprovenance.Source `json:"source_provenance,omitempty"`
+	Labels           []string                 `json:"labels"`
+	Attachments      []AttachmentInfo         `json:"attachments"`
 }
 
 // Address represents an email address with optional display name.

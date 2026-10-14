@@ -2,6 +2,7 @@ package query
 
 import (
 	"database/sql"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -20,7 +21,7 @@ func TestBoundedDuckDBMessageDetails(t *testing.T) {
 	t.Cleanup(func() { _ = db.Close() })
 	_, err = db.Exec(`
  CREATE SCHEMA sqlite_db;
- CREATE TABLE sqlite_db.messages (id BIGINT, source_id BIGINT, source_message_id VARCHAR, rfc822_message_id VARCHAR, conversation_id BIGINT, subject VARCHAR, message_type VARCHAR, snippet VARCHAR, sent_at TIMESTAMP, received_at TIMESTAMP, size_estimate BIGINT, has_attachments BOOLEAN, is_from_me BOOLEAN, deleted_from_source_at TIMESTAMP, deleted_at TIMESTAMP, sender_id BIGINT);
+ CREATE TABLE sqlite_db.messages (id BIGINT, source_id BIGINT, source_message_id VARCHAR, rfc822_message_id VARCHAR, conversation_id BIGINT, subject VARCHAR, message_type VARCHAR, snippet VARCHAR, sent_at TIMESTAMP, received_at TIMESTAMP, size_estimate BIGINT, has_attachments BOOLEAN, is_from_me BOOLEAN, deleted_from_source_at TIMESTAMP, deleted_at TIMESTAMP, sender_id BIGINT, metadata VARCHAR);
  CREATE TABLE sqlite_db.conversations (id BIGINT, source_conversation_id VARCHAR, title VARCHAR);
  CREATE TABLE sqlite_db.message_bodies (message_id BIGINT, body_text VARCHAR, body_html VARCHAR);
  CREATE TABLE sqlite_db.message_raw (message_id BIGINT, raw_data BLOB, compression VARCHAR);
@@ -29,22 +30,29 @@ func TestBoundedDuckDBMessageDetails(t *testing.T) {
  CREATE TABLE sqlite_db.labels (id BIGINT, name VARCHAR);
  CREATE TABLE sqlite_db.message_labels (message_id BIGINT, label_id BIGINT);
  CREATE TABLE sqlite_db.attachments (id BIGINT, message_id BIGINT, filename VARCHAR, mime_type VARCHAR, size BIGINT, content_hash VARCHAR, storage_path VARCHAR);
- INSERT INTO sqlite_db.messages (id, source_id, source_message_id, conversation_id, has_attachments) VALUES (1,1,'fixture',1,false);
+ INSERT INTO sqlite_db.messages (id, source_id, source_message_id, conversation_id, has_attachments, metadata) VALUES (1,1,'fixture',1,false,'{"mirror_provenance":{"kind":"public_git_mirror","repository":"example/synthetic-archive","repository_url":"https://example.invalid/synthetic-archive","commit":"0123456789abcdef","archive_paths":["threads/synthetic.json"],"author_identity":"synthetic-author","lifecycle_authority":"append_only_snapshot","private_key":"synthetic-private-value"},"private_key":"unrelated-private-value"}');
  INSERT INTO sqlite_db.conversations (id, source_conversation_id) VALUES (1,'fixture-thread');`)
 	requirements.NoError(err)
 	body := strings.Repeat("é", 17)
 	_, err = db.Exec(`INSERT INTO sqlite_db.message_bodies VALUES (1, ?, '')`, body)
 	requirements.NoError(err)
 	t.Run("text", func(t *testing.T) {
+		assert := assert.New(t)
+		require := require.New(t)
+
 		for _, limit := range []int64{32, 34} {
 			ctx := WithMessageByteLimit(t.Context(), limit)
 			detail, err := getMessageByQueryShared(ctx, db, noopRebind, "sqlite_db.", "m.id = ?", 1)
 			if limit == 32 {
-				require.ErrorIs(t, err, ErrOriginalMessageTooLarge)
+				require.ErrorIs(err, ErrOriginalMessageTooLarge)
 				continue
 			}
-			require.NoError(t, err)
-			assert.Equal(t, body, detail.BodyText)
+			require.NoError(err)
+			assert.Equal(body, detail.BodyText)
+			require.NotNil(detail.SourceProvenance)
+			projected, err := json.Marshal(detail.SourceProvenance)
+			require.NoError(err)
+			assert.JSONEq(`{"kind":"public_git_mirror","repository":"example/synthetic-archive","repository_url":"https://example.invalid/synthetic-archive","commit":"0123456789abcdef","archive_paths":["threads/synthetic.json"],"author_identity":"synthetic-author","lifecycle_authority":"append_only_snapshot"}`, string(projected))
 		}
 	})
 	raw := []byte("Subject: Fixture\r\n\r\nSynthetic body.")

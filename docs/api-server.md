@@ -1500,7 +1500,7 @@ is outside it:
 | Message body | `message_bodies` | Yes for an added or edited body (see the deletion row below), but the feed reports only `snippet`; fetch the body from `/api/v1/messages/{id}` |
 | Message body deletion | `message_bodies` | No — the body triggers fire on INSERT and UPDATE only. Adding or editing a body moves the watermark; deleting one does not |
 | Sender *pointer* (`messages.sender_id`) | `messages` | Yes — but the feed does not return it, and only the pointer is tracked. Renaming or correcting the participant it points at changes `participants`, not `sender_id`, so it does **not** move the watermark |
-| Platform metadata payload (`metadata`) | `messages` | Yes — but no endpoint returns it, so the wake-up is all you get. It is tracked so that a metadata change still invalidates your cached copy of the fields that *are* returned |
+| Platform metadata payload (`metadata`) | `messages` | Yes — private provider metadata remains internal; message details expose only an explicitly stored mirror-provenance projection. It is tracked so that a metadata change still invalidates your cached copy of the fields that *are* returned |
 
 A consumer that caches any of the untracked surfaces has to refresh them on its
 own schedule; nothing in this feed will invalidate them.
@@ -1522,6 +1522,10 @@ own schedule; nothing in this feed will invalidate them.
 **Endpoint:** `GET /api/v1/messages/{id}`
 
 Full message details including body and attachment metadata.
+
+When explicitly stored in a message's `mirror_provenance` metadata, the optional `source_provenance` object exposes only `kind`, `repository`, `repository_url`, `commit`, `archive_paths`, `author_identity` and `lifecycle_authority`. Unknown provider metadata and malformed or empty provenance envelopes remain omitted. These values describe stored import evidence; they do not establish trust in an external repository or authorize another network request. The same projection is available through MCP `get_message`. The optional `source_conversation_id` preserves the provider's conversation reference.
+
+This additive contract is newer than the latest release.
 
 **Response:**
 
